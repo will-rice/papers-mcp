@@ -22,6 +22,7 @@ class Paper:
     url: str
     abstract: str
     md_path: Path | None = None
+    markdown: str = ""
     cites: list[str] = field(default_factory=list)
     cited_by: list[str] = field(default_factory=list)
 
@@ -36,21 +37,25 @@ class Corpus:
     papers: dict[str, Paper] = field(default_factory=dict)
 
     def sync(self) -> None:
-        """Clone the corpus repo if absent, otherwise fast-forward pull."""
+        """Clone the corpus repo if absent, otherwise hard-reset to the latest origin HEAD.
+
+        A reset-to-fetched-ref mirror (rather than `pull --ff-only`) is immune to the
+        upstream repo ever force-pushing, which would otherwise fail every refresh forever.
+        """
         if (self.clone_dir / ".git").exists():
-            subprocess.run(
-                ["git", "-C", str(self.clone_dir), "pull", "--ff-only"],
-                check=True,
-                capture_output=True,
-            )
+            self._git(["-C", str(self.clone_dir), "fetch", "--depth", "1", "origin", "HEAD"])
+            self._git(["-C", str(self.clone_dir), "reset", "--hard", "FETCH_HEAD"])
         else:
             self.clone_dir.parent.mkdir(parents=True, exist_ok=True)
-            subprocess.run(
-                ["git", "clone", "--depth", "1", self.repo_url, str(self.clone_dir)],
-                check=True,
-                capture_output=True,
-            )
+            self._git(["clone", "--depth", "1", self.repo_url, str(self.clone_dir)])
         logging.info("synced %s corpus at %s", self.name, self.clone_dir)
+
+    def _git(self, args: list[str]) -> None:
+        """Run a git command, surfacing its stderr on failure instead of swallowing it."""
+        try:
+            subprocess.run(["git", *args], check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(f"git {args} failed for {self.name}: {exc.stderr.strip()}") from exc
 
     def load(self) -> None:
         """Load papers.csv, locate corpus markdown files, and build the citation graph."""
@@ -74,8 +79,8 @@ class Corpus:
         for paper in papers.values():
             if paper.md_path is None:
                 continue
-            body = paper.md_path.read_text(encoding="utf-8")
-            for cited_id in CITATION_LINK_RE.findall(body):
+            paper.markdown = paper.md_path.read_text(encoding="utf-8")
+            for cited_id in CITATION_LINK_RE.findall(paper.markdown):
                 if (
                     cited_id != paper.paper_id
                     and cited_id in papers

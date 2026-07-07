@@ -64,6 +64,15 @@ def test_unknown_paper_id_is_an_error(client: TestClient) -> None:
     assert resp.json()["result"]["isError"] is True
 
 
+def test_blank_query_is_an_error(client: TestClient) -> None:
+    resp = client.post(
+        "/lipsync/mcp",
+        json=rpc("tools/call", {"name": "search_papers", "arguments": {"query": "  "}}),
+        headers=MCP_HEADERS,
+    )
+    assert resp.json()["result"]["isError"] is True
+
+
 def test_get_citations_tool(client: TestClient) -> None:
     resp = client.post(
         "/lipsync/mcp",

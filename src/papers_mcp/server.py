@@ -83,6 +83,8 @@ def make_server(name: str) -> FastMCP:
         Returns the top matches with paper id, title, authors, submission date,
         and abstract. Use the paper id with get_paper or get_citations.
         """
+        if not query.strip():
+            raise ValueError("query must be non-empty")
         if not 1 <= limit <= MAX_SEARCH_LIMIT:
             raise ValueError(f"limit must be between 1 and {MAX_SEARCH_LIMIT}")
         results = indexes[name].search(query, limit)
@@ -91,13 +93,13 @@ def make_server(name: str) -> FastMCP:
     @mcp.tool()
     def get_paper(paper_id: str) -> str:
         """Return the paper's full converted markdown (methods, figures, references)."""
-        paper = lookup(name, paper_id)
+        paper = lookup(corpora[name].papers, name, paper_id)
         if paper.md_path is None:
             raise ValueError(
                 f"{paper_id} has no converted markdown; its metadata and abstract "
                 "are available via search_papers"
             )
-        return paper.md_path.read_text(encoding="utf-8")
+        return paper.markdown
 
     @mcp.tool()
     def get_citations(paper_id: str) -> str:
@@ -105,9 +107,7 @@ def make_server(name: str) -> FastMCP:
         # One snapshot: the refresh loop may swap corpora[name] between reads,
         # so resolve the paper and its cited titles from the same generation.
         papers = corpora[name].papers
-        paper = papers.get(paper_id)
-        if paper is None:
-            raise ValueError(f"paper id {paper_id!r} not found in the {name} corpus")
+        paper = lookup(papers, name, paper_id)
 
         def title_list(ids: list[str]) -> str:
             if not ids:
@@ -158,9 +158,9 @@ def refresh_loop(model: SentenceTransformer) -> None:
                 logging.exception("refresh failed for %s; serving previous index", name)
 
 
-def lookup(name: str, paper_id: str) -> Paper:
-    """Return the paper for *paper_id*, raising a concise error when unknown."""
-    paper = corpora[name].papers.get(paper_id)
+def lookup(papers: dict[str, Paper], name: str, paper_id: str) -> Paper:
+    """Return the paper for *paper_id* in *papers*, raising a concise error when unknown."""
+    paper = papers.get(paper_id)
     if paper is None:
         raise ValueError(f"paper id {paper_id!r} not found in the {name} corpus")
     return paper
