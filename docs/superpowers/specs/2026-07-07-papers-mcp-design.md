@@ -54,7 +54,10 @@ Adding a corpus is one entry, not a new deployment.
    arXiv/s2 id, title, authors, submitted date, and abstract per hit,
    formatted as concise markdown.
 2. `get_paper(paper_id: str)` — the paper's full converted markdown body
-   (frontmatter included). This is how an agent reads method sections.
+   (frontmatter included). This is how an agent reads method sections. Papers
+   present in `papers.csv` but lacking a corpus markdown file raise a tool
+   error saying so (their metadata and abstract are already available via
+   `search_papers`).
 3. `get_citations(paper_id: str)` — in-corpus papers this paper cites and
    in-corpus papers citing it, as two lists of id + title.
 4. `list_recent(days: int = 30)` — papers submitted in the last N days,
