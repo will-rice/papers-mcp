@@ -16,8 +16,8 @@ Public, read-only, streamable HTTP.
 
 | Endpoint | Corpus |
 |---|---|
-| `https://<space-host>/lipsync/mcp` | lipsync-papers |
-| `https://<space-host>/tts/mcp` | tts-papers |
+| `https://wrice-papers-mcp.hf.space/lipsync/mcp` | lipsync-papers |
+| `https://wrice-papers-mcp.hf.space/tts/mcp` | tts-papers |
 
 Tools per server: `search_papers` (hybrid BM25 + embedding search),
 `get_paper` (full markdown), `get_citations` (in-corpus citation graph),
@@ -26,8 +26,8 @@ Tools per server: `search_papers` (hybrid BM25 + embedding search),
 ## Connect
 
 ```bash
-claude mcp add --transport http lipsync-papers https://<space-host>/lipsync/mcp
-claude mcp add --transport http tts-papers https://<space-host>/tts/mcp
+claude mcp add --transport http lipsync-papers https://wrice-papers-mcp.hf.space/lipsync/mcp
+claude mcp add --transport http tts-papers https://wrice-papers-mcp.hf.space/tts/mcp
 ```
 
 ## Develop
