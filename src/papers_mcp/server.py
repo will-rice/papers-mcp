@@ -102,8 +102,12 @@ def make_server(name: str) -> FastMCP:
     @mcp.tool()
     def get_citations(paper_id: str) -> str:
         """List in-corpus papers this paper cites, and in-corpus papers citing it."""
-        paper = lookup(name, paper_id)
+        # One snapshot: the refresh loop may swap corpora[name] between reads,
+        # so resolve the paper and its cited titles from the same generation.
         papers = corpora[name].papers
+        paper = papers.get(paper_id)
+        if paper is None:
+            raise ValueError(f"paper id {paper_id!r} not found in the {name} corpus")
 
         def title_list(ids: list[str]) -> str:
             if not ids:
@@ -134,7 +138,7 @@ def make_server(name: str) -> FastMCP:
 
 
 def build_corpus(name: str, model: SentenceTransformer) -> None:
-    """Sync, load, and index one corpus, then atomically swap it into the registry."""
+    """Sync, load, and index one corpus, then swap it into the registry."""
     corpus = Corpus(name=name, repo_url=CORPORA[name], clone_dir=DATA_DIR / f"{name}-papers")
     corpus.sync()
     corpus.load()
