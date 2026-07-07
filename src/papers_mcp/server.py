@@ -59,6 +59,10 @@ def create_app() -> Starlette:
 
 def make_server(name: str) -> FastMCP:
     """Create the FastMCP server (and its four tools) for one corpus."""
+    import os
+
+    enable_dns_rebinding_protection = os.getenv("MCP_ENABLE_DNS_REBINDING_PROTECTION", "0") == "1"
+
     mcp = FastMCP(
         name=f"{name}-papers",
         instructions=(
@@ -73,7 +77,9 @@ def make_server(name: str) -> FastMCP:
         # which only ever allowlists 127.0.0.1/localhost -- would 421 every
         # request once deployed under a real hostname. Access control belongs
         # at the reverse-proxy/deployment layer instead.
-        transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+        transport_security=TransportSecuritySettings(
+            enable_dns_rebinding_protection=enable_dns_rebinding_protection
+        ),
     )
 
     @mcp.tool()
