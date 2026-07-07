@@ -976,6 +976,7 @@ dependencies = [
     { name = "mcp" },
     { name = "rank-bm25" },
     { name = "sentence-transformers" },
+    { name = "starlette" },
     { name = "uvicorn" },
 ]
 
@@ -991,6 +992,7 @@ requires-dist = [
     { name = "mcp", specifier = ">=1.27,<2" },
     { name = "rank-bm25", specifier = ">=0.2.2" },
     { name = "sentence-transformers", specifier = ">=3.0" },
+    { name = "starlette" },
     { name = "uvicorn", specifier = ">=0.30" },
 ]
 
