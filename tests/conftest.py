@@ -14,5 +14,5 @@ LIPSYNC_REPO = "https://github.com/will-rice/lipsync-papers"
 def lipsync_corpus() -> Corpus:
     corpus = Corpus(name="lipsync", repo_url=LIPSYNC_REPO, clone_dir=CACHE_DIR / "lipsync-papers")
     corpus.sync()
-    # corpus.load()  # enabled in Task 2
+    corpus.load()
     return corpus
