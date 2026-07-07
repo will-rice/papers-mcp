@@ -16,3 +16,9 @@ def lipsync_corpus() -> Corpus:
     corpus.sync()
     corpus.load()
     return corpus
+
+
+@pytest.fixture(scope="module")
+def monkeypatch_module():
+    with pytest.MonkeyPatch.context() as mp:
+        yield mp
