@@ -26,6 +26,7 @@ CORPORA = {
 DATA_DIR = Path("data")
 REFRESH_INTERVAL_SECONDS = 6 * 60 * 60
 MAX_SEARCH_LIMIT = 50
+MAX_RECENT_DAYS = 365
 
 corpora: dict[str, Corpus] = {}
 indexes: dict[str, SearchIndex] = {}
@@ -128,8 +129,8 @@ def make_server(name: str) -> FastMCP:
     @mcp.tool()
     def list_recent(days: int = 30) -> str:
         """List papers submitted in the last N days, newest first."""
-        if days < 1:
-            raise ValueError("days must be at least 1")
+        if not 1 <= days <= MAX_RECENT_DAYS:
+            raise ValueError(f"days must be between 1 and {MAX_RECENT_DAYS}")
         cutoff = (date.today() - timedelta(days=days)).isoformat()
         recent = sorted(
             (p for p in corpora[name].papers.values() if p.submitted >= cutoff),

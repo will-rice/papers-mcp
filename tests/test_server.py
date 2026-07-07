@@ -97,3 +97,12 @@ def test_list_recent_tool(client: TestClient) -> None:
     assert len(dates) > 5
     assert dates == sorted(dates, reverse=True)  # newest first
     assert min(dates) >= (date.today() - timedelta(days=365)).isoformat()
+
+
+def test_list_recent_days_over_cap_is_an_error(client: TestClient) -> None:
+    resp = client.post(
+        "/lipsync/mcp",
+        json=rpc("tools/call", {"name": "list_recent", "arguments": {"days": 366}}),
+        headers=MCP_HEADERS,
+    )
+    assert resp.json()["result"]["isError"] is True
