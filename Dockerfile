@@ -13,6 +13,9 @@ WORKDIR /app
 
 COPY --chown=user pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
+# Bake the embedding model into the image so startup doesn't hit the HF Hub.
+RUN uv run --no-sync python -c "from sentence_transformers import SentenceTransformer; \
+    SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2', device='cpu')"
 COPY --chown=user . .
 RUN uv sync --frozen --no-dev
 
