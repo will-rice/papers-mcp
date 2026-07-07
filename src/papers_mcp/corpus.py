@@ -1,6 +1,5 @@
 """Load and sync a research-papers corpus (papers.csv + markdown) from GitHub."""
 
-import csv
 import logging
 import re
 import subprocess

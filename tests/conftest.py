@@ -12,9 +12,7 @@ LIPSYNC_REPO = "https://github.com/will-rice/lipsync-papers"
 
 @pytest.fixture(scope="session")
 def lipsync_corpus() -> Corpus:
-    corpus = Corpus(
-        name="lipsync", repo_url=LIPSYNC_REPO, clone_dir=CACHE_DIR / "lipsync-papers"
-    )
+    corpus = Corpus(name="lipsync", repo_url=LIPSYNC_REPO, clone_dir=CACHE_DIR / "lipsync-papers")
     corpus.sync()
     # corpus.load()  # enabled in Task 2
     return corpus
