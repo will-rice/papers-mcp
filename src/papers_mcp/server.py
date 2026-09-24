@@ -5,7 +5,7 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
@@ -27,6 +27,11 @@ DATA_DIR = Path("data")
 REFRESH_INTERVAL_SECONDS = 6 * 60 * 60
 MAX_SEARCH_LIMIT = 50
 MAX_RECENT_DAYS = 365
+PAPER_ID_HELP = (
+    "Paper ids are papers.csv identifiers of the form `<source>:<id>`, e.g. "
+    "`arxiv:2412.09262v1`, `doi:10.1109/icassp.2024.10447000`, or "
+    "`semantic_scholar:<paper hash>`; copy them exactly from search_papers or list_recent."
+)
 
 corpora: dict[str, Corpus] = {}
 indexes: dict[str, SearchIndex] = {}
@@ -69,7 +74,7 @@ def make_server(name: str) -> FastMCP:
         instructions=(
             f"Query the {name}-papers research corpus ({CORPORA[name]}): "
             "search titles/abstracts, read full papers as markdown, follow the "
-            "in-corpus citation graph, and list recent papers."
+            "in-corpus citation graph, and list recent papers. " + PAPER_ID_HELP
         ),
         stateless_http=True,
         json_response=True,
@@ -87,8 +92,9 @@ def make_server(name: str) -> FastMCP:
     def search_papers(query: str, limit: int = 10) -> str:
         """Hybrid keyword + semantic search over paper titles, abstracts, and authors.
 
-        Returns the top matches with paper id, title, authors, submission date,
-        and abstract. Use the paper id with get_paper or get_citations.
+        Returns the top matches with paper id, title, authors, publication date,
+        and abstract. Use the paper id (e.g. `arxiv:2412.09262v1`) with get_paper or
+        get_citations.
         """
         if not query.strip():
             raise ValueError("query must be non-empty")
@@ -99,7 +105,12 @@ def make_server(name: str) -> FastMCP:
 
     @mcp.tool()
     def get_paper(paper_id: str) -> str:
-        """Return the paper's full converted markdown (methods, figures, references)."""
+        """Return the paper's full converted markdown (methods, figures, references).
+
+        *paper_id* is the full identifier from search_papers or list_recent, e.g.
+        `arxiv:2412.09262v1` (a bare arXiv id like `2412.09262` is not accepted).
+        Papers whose markdown has not been generated yet return an error.
+        """
         paper = lookup(corpora[name].papers, name, paper_id)
         if paper.md_path is None:
             raise ValueError(
@@ -110,7 +121,11 @@ def make_server(name: str) -> FastMCP:
 
     @mcp.tool()
     def get_citations(paper_id: str) -> str:
-        """List in-corpus papers this paper cites, and in-corpus papers citing it."""
+        """List in-corpus papers this paper cites, and in-corpus papers citing it.
+
+        *paper_id* is the full identifier from search_papers or list_recent, e.g.
+        `arxiv:2412.09262v1`; the listed citations use the same id format.
+        """
         # One snapshot: the refresh loop may swap corpora[name] between reads,
         # so resolve the paper and its cited titles from the same generation.
         papers = corpora[name].papers
@@ -128,17 +143,17 @@ def make_server(name: str) -> FastMCP:
 
     @mcp.tool()
     def list_recent(days: int = 30) -> str:
-        """List papers submitted in the last N days, newest first."""
+        """List papers published in the last N days, newest first."""
         if not 1 <= days <= MAX_RECENT_DAYS:
             raise ValueError(f"days must be between 1 and {MAX_RECENT_DAYS}")
-        cutoff = (date.today() - timedelta(days=days)).isoformat()
+        cutoff = datetime.now(UTC) - timedelta(days=days)
         recent = sorted(
-            (p for p in corpora[name].papers.values() if p.submitted >= cutoff),
-            key=lambda p: p.submitted,
+            (p for p in corpora[name].papers.values() if p.published >= cutoff),
+            key=lambda p: p.published,
             reverse=True,
         )
         if not recent:
-            return f"No papers submitted in the last {days} days."
+            return f"No papers published in the last {days} days."
         return "\n\n".join(format_paper(paper) for paper in recent)
 
     return mcp
@@ -169,14 +184,14 @@ def lookup(papers: dict[str, Paper], name: str, paper_id: str) -> Paper:
     """Return the paper for *paper_id* in *papers*, raising a concise error when unknown."""
     paper = papers.get(paper_id)
     if paper is None:
-        raise ValueError(f"paper id {paper_id!r} not found in the {name} corpus")
+        raise ValueError(f"paper id {paper_id!r} not found in the {name} corpus. {PAPER_ID_HELP}")
     return paper
 
 
 def format_paper(paper: Paper) -> str:
     """One search/listing hit as compact markdown."""
     return (
-        f"**{paper.title}** ({paper.paper_id}, {paper.submitted})\n"
-        f"{paper.authors}\n"
+        f"**{paper.title}** ({paper.paper_id}, {paper.published.date().isoformat()})\n"
+        f"{', '.join(paper.authors)}\n"
         f"{paper.abstract}"
     )
