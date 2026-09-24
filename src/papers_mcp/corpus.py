@@ -1,14 +1,33 @@
 """Load and sync a research-papers corpus (papers.csv + markdown) from GitHub."""
 
 import csv
+import hashlib
 import logging
 import re
 import subprocess
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
-# In-corpus citation links: `](../<year>/<id>.md)` or same-directory `](<id>.md)`.
-CITATION_LINK_RE = re.compile(r"\]\((?:\.\./\d{4}/)?([^/()\s]+)\.md\)")
+# Markdown filename rule, mirrored from papers-template's `expected_markdown`
+# (template/src/papers_pipeline/batching.py): `papers/<slug>--<digest>.md`.
+SLUG_LIMIT = 80
+DIGEST_LENGTH = 12
+SLUG_RE = re.compile(r"[^a-z0-9]+")
+
+# In-corpus citation links point at a sibling markdown file: `](<slug>--<digest>.md)`.
+CITATION_LINK_RE = re.compile(rf"\]\(([a-z0-9-]+--[0-9a-f]{{{DIGEST_LENGTH}}})\.md\)")
+
+
+def markdown_stem(identifier: str) -> str:
+    """Return the markdown filename stem papers-template assigns to *identifier*.
+
+    Mirrors `_identifier_slug` and `_identifier_digest` in papers-template's
+    `papers_pipeline.batching`; keep in sync with its `expected_markdown`.
+    """
+    slug = SLUG_RE.sub("-", identifier.casefold()).strip("-")[:SLUG_LIMIT].rstrip("-") or "paper"
+    digest = hashlib.sha256(identifier.encode("utf-8")).hexdigest()[:DIGEST_LENGTH]
+    return f"{slug}--{digest}"
 
 
 @dataclass
@@ -17,8 +36,8 @@ class Paper:
 
     paper_id: str
     title: str
-    authors: str
-    submitted: str
+    authors: tuple[str, ...]
+    published: datetime
     url: str
     abstract: str
     md_path: Path | None = None
@@ -29,7 +48,7 @@ class Paper:
 
 @dataclass
 class Corpus:
-    """A cloned corpus repo and its loaded papers, keyed by paper id."""
+    """A cloned corpus repo and its loaded papers, keyed by papers.csv `identifier`."""
 
     name: str
     repo_url: str
@@ -58,32 +77,41 @@ class Corpus:
             raise RuntimeError(f"git {args} failed for {self.name}: {exc.stderr.strip()}") from exc
 
     def load(self) -> None:
-        """Load papers.csv, locate corpus markdown files, and build the citation graph."""
+        """Load papers.csv, attach generated markdown, and build the citation graph.
+
+        Papers listed in papers.csv whose markdown has not been generated yet keep
+        `md_path=None`.
+        """
         papers: dict[str, Paper] = {}
         with (self.clone_dir / "papers.csv").open(newline="", encoding="utf-8") as f:
             for row in csv.DictReader(f):
-                papers[row["arxiv_id"]] = Paper(
-                    paper_id=row["arxiv_id"],
+                published = datetime.fromisoformat(row["published"])
+                if published.tzinfo is None:
+                    raise ValueError(f"{row['identifier']} has a timezone-naive published date")
+                papers[row["identifier"]] = Paper(
+                    paper_id=row["identifier"],
                     title=row["title"],
-                    authors=row["authors"],
-                    submitted=row["submitted"],
+                    authors=tuple(filter(None, row["authors"].split("|"))),
+                    published=published,
                     url=row["url"],
                     abstract=row["abstract"],
                 )
 
-        for md_path in sorted(self.clone_dir.glob("papers/*/*.md")):
-            paper = papers.get(md_path.stem)  # skips per-year README.md files
-            if paper:
-                paper.md_path = md_path
+        ids_by_stem = {markdown_stem(paper_id): paper_id for paper_id in papers}
+        for stem, paper_id in ids_by_stem.items():
+            md_path = self.clone_dir / "papers" / f"{stem}.md"
+            if md_path.exists():
+                papers[paper_id].md_path = md_path
 
         for paper in papers.values():
             if paper.md_path is None:
                 continue
             paper.markdown = paper.md_path.read_text(encoding="utf-8")
-            for cited_id in CITATION_LINK_RE.findall(paper.markdown):
+            for stem in CITATION_LINK_RE.findall(paper.markdown):
+                cited_id = ids_by_stem.get(stem)
                 if (
-                    cited_id != paper.paper_id
-                    and cited_id in papers
+                    cited_id is not None
+                    and cited_id != paper.paper_id
                     and cited_id not in paper.cites
                 ):
                     paper.cites.append(cited_id)

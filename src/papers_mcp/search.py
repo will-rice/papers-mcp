@@ -26,7 +26,9 @@ class SearchIndex:
         self.papers = papers
         self.model = model
         texts = [f"{p.title} {p.abstract}" for p in papers]
-        self.bm25 = BM25Okapi([tokenize(f"{text} {p.authors}") for text, p in zip(texts, papers)])
+        self.bm25 = BM25Okapi(
+            [tokenize(f"{text} {' '.join(p.authors)}") for text, p in zip(texts, papers)]
+        )
         self.embeddings = model.encode(texts, convert_to_tensor=True, normalize_embeddings=True)
 
     def search(self, query: str, limit: int) -> list[Paper]:
